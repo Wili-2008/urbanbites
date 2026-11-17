@@ -21,7 +21,7 @@ const request = async (endpoint, options = {}) => {
         });
     } catch (error) {
         if (error instanceof TypeError) {
-            throw new Error('No se pudo comunicar con el API. Verifica que WAMP esté activo y que el servidor permita solicitudes desde el frontend.');
+            throw new Error('No se pudo comunicar con el servidor. Verifica que el sitio y el API estén disponibles.');
         }
         throw error;
     }
