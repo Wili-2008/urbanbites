@@ -1,17 +1,26 @@
-### Listar pedidos
-GET http://Urbanbites.com/backend/routes/api.php/listarpedidos
-Accept: application/json
+# ====================================================================
+# URBAN BITES - Módulo de Pedidos en Línea (Clientes)
+# Documentación para REST Client de Visual Studio Code
+# ====================================================================
 
-### Crear pedido; subtotal, envío y total se calculan en el backend
-POST http://Urbanbites.com/backend/routes/api.php/agregar_pedido
+@baseUrl = http://Urbanbites.com/backend/routes/api.php
+@authToken = TU_TOKEN_JWT_AQUI
+
+### 1. Listar pedidos (Cliente ve los suyos; Administrador ve todos)
+GET {{baseUrl}}/listarpedidos
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+### 2. Crear pedido en línea (Totales calculados en el backend)
+POST {{baseUrl}}/agregar_pedido
 Content-Type: application/json
+Authorization: Bearer {{authToken}}
 
 {
-  "id_usuario": 3,
   "tipo_entrega": "domicilio",
   "direccion_entrega": "Av. Principal 123",
   "referencia_entrega": "Casa azul, junto al parque",
-  "telefono_contacto": "5551234567",
+  "telefono_contacto": "78912345",
   "observaciones": "Sin cebolla",
   "items": [
     {
@@ -21,18 +30,21 @@ Content-Type: application/json
   ]
 }
 
-### Actualizar estado del pedido
-PUT http://Urbanbites.com/backend/routes/api.php/update_pedido
+### 3. Actualizar estado del pedido (Solo Administrador)
+# Estados permitidos: pendiente, aceptado, en_preparacion, listo, entregado, cancelado
+PUT {{baseUrl}}/update_pedido
 Content-Type: application/json
+Authorization: Bearer {{authToken}}
 
 {
   "id_pedido": 1,
   "estado": "aceptado"
 }
 
-### Cancelar pedido (se conserva el historial)
-DELETE http://Urbanbites.com/backend/routes/api.php/delete_pedido
+### 4. Cancelar pedido (Solo Administrador)
+DELETE {{baseUrl}}/delete_pedido
 Content-Type: application/json
+Authorization: Bearer {{authToken}}
 
 {
   "id_pedido": 1
