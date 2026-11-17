@@ -1,0 +1,19 @@
+# Entorno y credenciales privadas
+backend/.env
+*.env
+*.env.local
+
+# Logs y temporales
+*.log
+xdebug.log
+error_log
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Dependencias (si aplica)
+node_modules/
+vendor/

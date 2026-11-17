@@ -1,2 +1,7 @@
-# Los endpoints públicos llaman directamente a routes/api.php/{ruta}.
-# No reescribir dentro del Alias del VirtualHost: WAMP devuelve HTTP 400.
+Options -Indexes
+
+# No se usan reglas de reescritura: el frontend llama a routes/api.php/{ruta}.
+# Bloquear configuración y archivos internos si este directorio es público.
+<FilesMatch "(?i)(^\.|\.(sql|rest|md|log|bak|old)$)">
+    Require all denied
+</FilesMatch>
