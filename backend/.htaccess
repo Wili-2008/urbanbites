@@ -1,0 +1,2 @@
+# Los endpoints públicos llaman directamente a routes/api.php/{ruta}.
+# No reescribir dentro del Alias del VirtualHost: WAMP devuelve HTTP 400.

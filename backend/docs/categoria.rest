@@ -1,0 +1,31 @@
+### Listar categorías
+GET http://Urbanbites.com/backend/routes/api.php/listarcategorias
+Accept: application/json
+
+### Crear categoría
+POST http://Urbanbites.com/backend/routes/api.php/agregar_categoria
+Content-Type: application/json
+
+{
+  "nombre": "Hamburguesas",
+  "descripcion": "Hamburguesas preparadas al momento"
+}
+
+### Actualizar categoría
+PUT http://Urbanbites.com/backend/routes/api.php/update_categoria
+Content-Type: application/json
+
+{
+  "id_categoria": 1,
+  "nombre": "Hamburguesas",
+  "descripcion": "Hamburguesas preparadas al momento",
+  "activa": 1
+}
+
+### Eliminar categoría
+DELETE http://Urbanbites.com/backend/routes/api.php/delete_categoria
+Content-Type: application/json
+
+{
+  "id_categoria": 1
+}

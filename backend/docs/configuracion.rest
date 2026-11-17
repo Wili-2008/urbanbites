@@ -1,0 +1,12 @@
+### Consultar la configuración del negocio y el costo de envío
+GET http://Urbanbites.com/backend/routes/api.php/configuracion
+Accept: application/json
+
+### Actualizar configuración (registro único con id_configuracion = 1)
+PUT http://Urbanbites.com/backend/routes/api.php/update_configuracion
+Content-Type: application/json
+
+{
+  "nombre_negocio": "Urban Bites",
+  "costo_envio": 10.00
+}

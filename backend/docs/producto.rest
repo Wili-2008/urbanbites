@@ -1,0 +1,38 @@
+### Listar productos
+GET http://Urbanbites.com/backend/routes/api.php/listarproductos
+Accept: application/json
+
+### Crear producto
+POST http://Urbanbites.com/backend/routes/api.php/agregar_producto
+Content-Type: application/json
+
+{
+  "id_categoria": 1,
+  "nombre": "Hamburguesa clásica",
+  "descripcion": "Carne, queso, lechuga y tomate",
+  "precio": 89.00,
+  "imagen": "imagenes/hamburguesa-clasica.jpg",
+  "disponible": 1
+}
+
+### Actualizar producto
+PUT http://Urbanbites.com/backend/routes/api.php/update_producto
+Content-Type: application/json
+
+{
+  "id_producto": 1,
+  "id_categoria": 1,
+  "nombre": "Hamburguesa clásica",
+  "descripcion": "Descripción actualizada",
+  "precio": 99.00,
+  "imagen": "imagenes/hamburguesa-clasica.jpg",
+  "disponible": 1
+}
+
+### Eliminar producto
+DELETE http://Urbanbites.com/backend/routes/api.php/delete_producto
+Content-Type: application/json
+
+{
+  "id_producto": 1
+}

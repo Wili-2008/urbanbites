@@ -1,0 +1,39 @@
+### Listar pedidos
+GET http://Urbanbites.com/backend/routes/api.php/listarpedidos
+Accept: application/json
+
+### Crear pedido; subtotal, envío y total se calculan en el backend
+POST http://Urbanbites.com/backend/routes/api.php/agregar_pedido
+Content-Type: application/json
+
+{
+  "id_usuario": 3,
+  "tipo_entrega": "domicilio",
+  "direccion_entrega": "Av. Principal 123",
+  "referencia_entrega": "Casa azul, junto al parque",
+  "telefono_contacto": "5551234567",
+  "observaciones": "Sin cebolla",
+  "items": [
+    {
+      "id_producto": 1,
+      "cantidad": 2
+    }
+  ]
+}
+
+### Actualizar estado del pedido
+PUT http://Urbanbites.com/backend/routes/api.php/update_pedido
+Content-Type: application/json
+
+{
+  "id_pedido": 1,
+  "estado": "aceptado"
+}
+
+### Cancelar pedido (se conserva el historial)
+DELETE http://Urbanbites.com/backend/routes/api.php/delete_pedido
+Content-Type: application/json
+
+{
+  "id_pedido": 1
+}

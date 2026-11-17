@@ -1,0 +1,47 @@
+### Listar usuarios
+GET http://Urbanbites.com/backend/routes/api.php/listar_usuarios
+Accept: application/json
+
+### Registrar usuario
+POST http://Urbanbites.com/backend/routes/api.php/agregar_usuario
+Content-Type: application/json
+
+{
+  "nombre": "julio",
+  "correo": "cliente@example.com",
+  "telefono": "5551234567",
+  "contrasena": "cambia-esta-clave",
+  "rol": "cliente"
+}
+
+### Actualizar usuario (contrasena es opcional)
+PUT http://Urbanbites.com/backend/routes/api.php/update_usuario
+Content-Type: application/json
+
+{
+  "id_usuario": 3,
+  "nombre": "Nombre Apellido",
+  "correo": "persona@example.com",
+  "telefono": "5551234567",
+  "rol": "administrador",
+  "activo": 1
+}
+
+### Eliminar usuario
+DELETE http://Urbanbites.com/backend/routes/api.php/delete_usuario
+Content-Type: application/json
+
+{
+  "id_usuario": 4
+}
+
+### Registrar cliente (se almacena en usuarios con rol cliente)
+POST http://Urbanbites.com/backend/routes/api.php/auth/registrar-cliente
+Content-Type: application/json
+
+{
+  "nombre": "Cliente Urban Bites",
+  "correo": "nuevo@example.com",
+  "telefono": "5551234567",
+  "contrasena": "cambia-esta-clave"
+}

@@ -1,0 +1,98 @@
+.admin-users article {
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.admin-users article > div {
+    flex-basis: 100%;
+}
+
+.admin-users label {
+    display: grid;
+    flex: 1 1 180px;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.admin-users input,
+.admin-users select {
+    width: 100%;
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid #e4ded5;
+    background: #fff;
+    color: var(--ink);
+}
+
+.admin-users button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.product-image img,
+.cart-line img,
+.admin-products img,
+.hero-art img {
+    background: #f0e8db;
+}
+
+.admin-products label {
+    display: grid;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.admin-products select {
+    min-width: 130px;
+    padding: 8px;
+    border: 1px solid #e4ded5;
+    background: #fff;
+    color: var(--ink);
+}
+
+.form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.current-product-image {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.current-product-image img {
+    width: 84px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #e4ded5;
+}
+
+.order-items span {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+@media (max-width: 700px) {
+    .admin-products article,
+    .admin-users article {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    .admin-products article > div {
+        min-width: calc(100% - 90px);
+    }
+
+    .admin-products button,
+    .admin-users button {
+        flex: 1 1 42%;
+    }
+}
