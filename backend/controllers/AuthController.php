@@ -34,13 +34,21 @@ class AuthController extends ApiController
             return [
                 'success' => true,
                 'token' => $this->generarToken([
-                    'id' => $created['id_usuario'], 'id_usuario' => $created['id_usuario'],
-                    'tipo' => 'usuario', 'rol' => 'administrador', 'correo' => $correo,
+                    'id' => $created['id_usuario'],
+                    'id_usuario' => $created['id_usuario'],
+                    'tipo' => 'usuario',
+                    'rol' => 'administrador',
+                    'correo' => $correo,
                 ]),
                 'user' => [
-                    'id_usuario' => $created['id_usuario'], 'id' => $created['id_usuario'],
-                    'nombre' => $nombre, 'correo' => $correo, 'email' => $correo,
-                    'telefono' => null, 'rol' => 'administrador', 'tipo' => 'usuario',
+                    'id_usuario' => $created['id_usuario'],
+                    'id' => $created['id_usuario'],
+                    'nombre' => $nombre,
+                    'correo' => $correo,
+                    'email' => $correo,
+                    'telefono' => null,
+                    'rol' => 'administrador',
+                    'tipo' => 'usuario',
                 ],
             ];
         }, 201);
@@ -48,7 +56,7 @@ class AuthController extends ApiController
 
     public function loginUsuario()
     {
-        $this->authenticate(['administrador']);
+        $this->authenticate(['administrador', 'vendedor']);
     }
 
     public function loginCliente()
@@ -58,7 +66,7 @@ class AuthController extends ApiController
 
     public function login()
     {
-        $this->authenticate(['administrador', 'cliente']);
+        $this->authenticate(['administrador', 'vendedor', 'cliente']);
     }
 
     private function authenticate(array $roles)
@@ -86,11 +94,13 @@ class AuthController extends ApiController
                     'id_usuario' => (int) $user['id_usuario'],
                     'tipo' => $tipo,
                     'rol' => $user['rol'],
+                    'id_rol' => (int) ($user['id_rol'] ?? 3),
                     'correo' => $user['correo'],
                 ]),
                 'user' => [
                     'id_usuario' => (int) $user['id_usuario'],
                     'id' => (int) $user['id_usuario'],
+                    'id_rol' => (int) ($user['id_rol'] ?? 3),
                     'nombre' => $user['nombre'],
                     'correo' => $user['correo'],
                     'email' => $user['correo'],
@@ -119,58 +129,76 @@ class AuthController extends ApiController
             if (Cliente::obtenerPorEmail($correo)) {
                 throw new DomainException('El correo ya está registrado.');
             }
-
-            $created = Usuario::crear($nombre, $correo, $password, 'cliente', $telefono);
+            $created = Cliente::crearConAutenticacion($nombre, $correo, $password);
+            $userId = (int) $created['id'];
             return [
                 'success' => true,
-                'message' => 'Cliente registrado correctamente.',
+                'message' => 'Cuenta creada correctamente.',
                 'token' => $this->generarToken([
-                    'id' => $created['id_usuario'],
-                    'id_usuario' => $created['id_usuario'],
+                    'id' => $userId,
+                    'id_usuario' => $userId,
                     'tipo' => 'cliente',
                     'rol' => 'cliente',
                     'correo' => $correo,
                 ]),
                 'user' => [
-                    'id_usuario' => $created['id_usuario'],
-                    'id' => $created['id_usuario'],
+                    'id_usuario' => $userId,
+                    'id' => $userId,
                     'nombre' => $nombre,
                     'correo' => $correo,
                     'email' => $correo,
                     'telefono' => $telefono,
-                    'tipo' => 'cliente',
                     'rol' => 'cliente',
+                    'tipo' => 'cliente',
                 ],
             ];
         }, 201);
     }
 
-    public function logout()
-    {
-        $this->respond(['success' => true, 'message' => 'Sesión cerrada correctamente.']);
-    }
-
     public function verifyToken()
     {
-        try {
-            $payload = AuthMiddleware::autenticado();
-        } catch (AuthenticationException $exception) {
-            $this->respond(['authenticated' => false], 401);
-            return;
-        }
-        $this->respond(['authenticated' => true, 'user' => $payload]);
+        $this->run(function () {
+            $user = AuthMiddleware::autenticado();
+            return [
+                'success' => true,
+                'user' => [
+                    'id_usuario' => (int) $user['id_usuario'],
+                    'id' => (int) $user['id_usuario'],
+                    'id_rol' => (int) ($user['id_rol'] ?? 3),
+                    'nombre' => $user['nombre'],
+                    'correo' => $user['correo'],
+                    'telefono' => $user['telefono'],
+                    'rol' => $user['rol'],
+                    'tipo' => $user['rol'] === 'cliente' ? 'cliente' : 'usuario',
+                ],
+            ];
+        });
+    }
+
+    public function logout()
+    {
+        $this->run(function () {
+            return ['success' => true, 'message' => 'Sesión cerrada correctamente.'];
+        });
     }
 
     private function generarToken(array $payload)
     {
-        $header = self::base64UrlEncode(json_encode(['alg' => 'HS256', 'typ' => 'JWT']));
-        $body = self::base64UrlEncode(json_encode($payload + ['iat' => time(), 'exp' => time() + 86400]));
-        $signature = self::base64UrlEncode(hash_hmac('sha256', $header . '.' . $body, JWT_SECRET, true));
-        return $header . '.' . $body . '.' . $signature;
+        $header = ['typ' => 'JWT', 'alg' => 'HS256'];
+        $issued = time();
+        $payload['iat'] = $issued;
+        $payload['exp'] = $issued + (60 * 60 * 24); // 24 horas
+
+        $base64Header = $this->base64UrlEncode(json_encode($header));
+        $base64Payload = $this->base64UrlEncode(json_encode($payload));
+        $signature = hash_hmac('sha256', "{$base64Header}.{$base64Payload}", JWT_SECRET, true);
+        $base64Signature = $this->base64UrlEncode($signature);
+
+        return "{$base64Header}.{$base64Payload}.{$base64Signature}";
     }
 
-    private static function base64UrlEncode($value)
+    private function base64UrlEncode($data)
     {
-        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
     }
 }

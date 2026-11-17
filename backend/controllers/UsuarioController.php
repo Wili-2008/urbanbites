@@ -1,12 +1,15 @@
 <?php
 require_once __DIR__ . '/ApiController.php';
 require_once __DIR__ . '/../models/Usuario.php';
+require_once __DIR__ . '/../models/Rol.php';
+require_once __DIR__ . '/../config/AuthMiddleware.php';
 
 class UsuarioController extends ApiController
 {
     public function listarUsuarios()
     {
         $this->run(function () {
+            AuthMiddleware::esAdmin();
             return Usuario::obtenerTodos();
         });
     }
@@ -14,83 +17,123 @@ class UsuarioController extends ApiController
     public function agregarUsuario()
     {
         $this->run(function () {
+            $actor = AuthMiddleware::esAdmin();
             $data = $this->input();
-            $correo = $data['correo'] ?? $data['email'] ?? null;
-            if (!isset($data['nombre'], $correo) || !isset($data['contrasena']) && !isset($data['password'])) {
-                throw new InvalidArgumentException('Nombre, correo y contraseña son obligatorios.');
+            $this->requireFields($data, ['nombre', 'correo', 'contrasena']);
+
+            $name = trim((string) $data['nombre']);
+            $email = trim((string) $data['correo']);
+            $password = (string) $data['contrasena'];
+            $role = trim((string) ($data['rol'] ?? 'cliente'));
+            $phone = isset($data['telefono']) ? trim((string) $data['telefono']) : null;
+
+            if ($name === '' || strlen($name) > 100) {
+                throw new InvalidArgumentException('El nombre es obligatorio y debe tener como máximo 100 caracteres.');
             }
-            $password = $data['contrasena'] ?? $data['password'];
-            $rol = $data['rol'] ?? 'cliente';
-            if (trim((string) $data['nombre']) === '' || strlen((string) $data['nombre']) > 100
-                || !filter_var($correo, FILTER_VALIDATE_EMAIL) || strlen((string) $correo) > 150
-                || strlen($password) < 6 || !in_array($rol, ['administrador', 'cliente'], true)) {
-                throw new InvalidArgumentException('Nombre, correo válido y contraseña son obligatorios.');
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150) {
+                throw new InvalidArgumentException('El correo electrónico no es válido.');
             }
-            $telefono = $data['telefono'] ?? null;
-            if ($telefono !== null && strlen((string) $telefono) > 25) {
-                throw new InvalidArgumentException('El teléfono no puede superar 25 caracteres.');
+            if (strlen($password) < 6) {
+                throw new InvalidArgumentException('La contraseña debe tener al menos 6 caracteres.');
             }
-            $created = Usuario::crear(trim($data['nombre']), trim($correo), $password, $rol, $telefono);
-            return ['success' => true, 'data' => $created];
+            if (!in_array($role, ['administrador', 'vendedor', 'cliente'], true)) {
+                throw new InvalidArgumentException('El rol especificado no es válido (administrador, vendedor, cliente).');
+            }
+            if ($phone !== null && strlen($phone) > 25) {
+                throw new InvalidArgumentException('El teléfono no debe superar 25 caracteres.');
+            }
+            if (Usuario::obtenerPorCorreo($email)) {
+                throw new DomainException('Ya existe una cuenta registrada con este correo electrónico.');
+            }
+
+            $created = Usuario::crear(
+                $name,
+                $email,
+                $password,
+                $role,
+                $phone,
+                $actor['id_usuario'],
+                $actor['nombre']
+            );
+
+            return [
+                'success' => true,
+                'message' => 'Usuario creado exitosamente.',
+                'id_usuario' => $created['id_usuario'],
+            ];
         }, 201);
     }
 
     public function updateUsuario()
     {
         $this->run(function () {
+            $actor = AuthMiddleware::esAdmin();
             $data = $this->input();
-            $this->requireFields($data, ['id_usuario', 'nombre']);
-            $admin = AuthMiddleware::esAdmin();
-            $idUsuario = $this->positiveInteger($data['id_usuario'], 'id_usuario');
-            $correo = $data['correo'] ?? $data['email'] ?? null;
-            if (!filter_var($correo, FILTER_VALIDATE_EMAIL) || strlen((string) $correo) > 150
-                || trim((string) $data['nombre']) === '' || strlen((string) $data['nombre']) > 100) {
-                throw new InvalidArgumentException('Se requiere un correo válido.');
+            $this->requireFields($data, ['id_usuario', 'nombre', 'correo']);
+
+            $id = $this->positiveInteger($data['id_usuario'], 'id_usuario');
+            $name = trim((string) $data['nombre']);
+            $email = trim((string) $data['correo']);
+            $password = isset($data['contrasena']) && $data['contrasena'] !== '' ? (string) $data['contrasena'] : null;
+            $role = isset($data['rol']) ? trim((string) $data['rol']) : null;
+            $phone = isset($data['telefono']) ? trim((string) $data['telefono']) : null;
+            $active = isset($data['activo']) ? (int) $data['activo'] : null;
+
+            if ($name === '' || strlen($name) > 100) {
+                throw new InvalidArgumentException('El nombre es obligatorio y debe tener como máximo 100 caracteres.');
             }
-            $rol = $data['rol'] ?? null;
-            if ($rol !== null && !in_array($rol, ['administrador', 'cliente'], true)) {
-                throw new InvalidArgumentException('El rol debe ser administrador o cliente.');
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150) {
+                throw new InvalidArgumentException('El correo electrónico no es válido.');
             }
-            $telefono = $data['telefono'] ?? null;
-            if ($telefono !== null && strlen((string) $telefono) > 25) {
-                throw new InvalidArgumentException('El teléfono no puede superar 25 caracteres.');
+            if ($password !== null && strlen($password) < 6) {
+                throw new InvalidArgumentException('La contraseña debe tener al menos 6 caracteres.');
             }
-            $activo = array_key_exists('activo', $data) ? $this->activeFlag($data['activo']) : null;
-            if ((int) $admin['id_usuario'] === $idUsuario
-                && ($activo === 0 || $rol === 'cliente')) {
-                throw new DomainException('No puedes desactivar o cambiar el rol de tu propia cuenta.');
+            if ($role !== null && !in_array($role, ['administrador', 'vendedor', 'cliente'], true)) {
+                throw new InvalidArgumentException('El rol especificado no es válido.');
             }
-            return ['success' => true, 'affected' => Usuario::updateUsuario(
-                $idUsuario,
-                trim($data['nombre']),
-                trim($correo),
-                $telefono,
-                $data['contrasena'] ?? $data['password'] ?? null,
-                $rol,
-                $activo
-            )];
+
+            $existing = Usuario::obtenerPorCorreo($email);
+            if ($existing && (int) $existing['id_usuario'] !== $id) {
+                throw new DomainException('Ya existe otra cuenta registrada con este correo electrónico.');
+            }
+
+            $affected = Usuario::updateUsuario(
+                $id,
+                $name,
+                $email,
+                $phone,
+                $password,
+                $role,
+                $active,
+                $actor['id_usuario'],
+                $actor['nombre']
+            );
+
+            return [
+                'success' => true,
+                'message' => 'Usuario actualizado exitosamente.',
+                'affected' => $affected,
+            ];
         });
     }
 
     public function deleteUsuario()
     {
         $this->run(function () {
+            $actor = AuthMiddleware::esAdmin();
             $data = $this->input();
-            $id = $data['id_usuario'] ?? $_GET['id_usuario'] ?? null;
-            $id = $this->positiveInteger($id, 'id_usuario');
-            $admin = AuthMiddleware::esAdmin();
-            if ((int) $admin['id_usuario'] === $id) {
-                throw new DomainException('No puedes desactivar tu propia cuenta.');
-            }
-            return ['success' => true, 'affected' => Usuario::deleteUsuario($id)];
-        });
-    }
+            $id = $this->positiveInteger($data['id_usuario'] ?? null, 'id_usuario');
 
-    private function activeFlag($value)
-    {
-        if (!in_array($value, [0, 1, '0', '1', true, false], true)) {
-            throw new InvalidArgumentException('El campo activo debe ser booleano.');
-        }
-        return (int) (bool) $value;
+            if ($id === (int) $actor['id_usuario']) {
+                throw new DomainException('No puedes desactivar tu propia cuenta administradora.');
+            }
+
+            $affected = Usuario::deleteUsuario($id, $actor['id_usuario'], $actor['nombre']);
+            return [
+                'success' => true,
+                'message' => 'Usuario desactivado correctamente.',
+                'affected' => $affected,
+            ];
+        });
     }
 }

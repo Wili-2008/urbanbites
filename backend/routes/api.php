@@ -26,9 +26,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../controllers/AuthController.php';
 require_once __DIR__ . '/../controllers/UsuarioController.php';
+require_once __DIR__ . '/../controllers/RolController.php';
 require_once __DIR__ . '/../controllers/ClienteController.php';
 require_once __DIR__ . '/../controllers/CategoriaController.php';
 require_once __DIR__ . '/../controllers/ProductoController.php';
+require_once __DIR__ . '/../controllers/VentaController.php';
+require_once __DIR__ . '/../controllers/ReporteController.php';
+require_once __DIR__ . '/../controllers/AuditoriaController.php';
 require_once __DIR__ . '/../controllers/PedidoController.php';
 require_once __DIR__ . '/../controllers/DetallePedidoController.php';
 require_once __DIR__ . '/../controllers/ConfiguracionController.php';
@@ -43,17 +47,44 @@ foreach (['backend/', 'routes/api.php/', 'api.php/', 'api/'] as $prefix) {
 }
 $uri = strtolower(trim($uri, '/'));
 
-$adminGetRoutes = ['listarusuarios', 'listar_usuarios', 'listarclientes', 'listar_clientes'];
+// Control estricto de rutas protegidas para Administrador
+$adminGetRoutes = [
+    'listarusuarios',
+    'listar_usuarios',
+    'listarclientes',
+    'listar_clientes',
+    'reportes/ventas',
+    'reporte_ventas',
+    'auditoria/listar',
+    'listar_auditoria',
+    'movimientos/listar',
+    'listar_movimientos',
+];
+
 $adminPostRoutes = [
     'agregar_usuario',
     'agregar_cliente',
     'agregar_categoria',
     'agregar_producto',
+    'ajustar_stock',
     'agregar_detallepedido',
     'update_configuracion',
     'subir_imagen_producto',
     'quitar_imagen_producto',
 ];
+
+// Rutas accesibles para Vendedor y Administrador (Punto de Venta)
+$posGetRoutes = [
+    'listarventas',
+    'listar_ventas',
+    'obtener_venta',
+    'listarroles',
+];
+
+$posPostRoutes = [
+    'agregar_venta',
+];
+
 if (
     ($method === 'GET' && in_array($uri, $adminGetRoutes, true))
     || ($method === 'GET' && (
@@ -65,6 +96,11 @@ if (
     || ($method === 'POST' && in_array($uri, $adminPostRoutes, true))
 ) {
     AuthMiddleware::esAdmin();
+} elseif (
+    ($method === 'GET' && in_array($uri, $posGetRoutes, true))
+    || ($method === 'POST' && in_array($uri, $posPostRoutes, true))
+) {
+    AuthMiddleware::esVendedorOAdmin();
 } elseif ($method === 'GET' && in_array($uri, ['listarpedidos', 'listar_pedidos', 'listardetallepedidos', 'listar_detallepedidos'], true)) {
     AuthMiddleware::autenticado();
 }
@@ -86,9 +122,13 @@ if ($method === 'POST' || $method === 'PUT' || $method === 'DELETE') {
 
 $auth = new AuthController();
 $usuario = new UsuarioController();
+$rol = new RolController();
 $cliente = new ClienteController();
 $categoria = new CategoriaController();
 $producto = new ProductoController();
+$venta = new VentaController();
+$reporte = new ReporteController();
+$auditoria = new AuditoriaController();
 $pedido = new PedidoController();
 $detalle = new DetallePedidoController();
 $configuracion = new ConfiguracionController();
@@ -109,6 +149,9 @@ if ($method === 'GET') {
         case 'listar_usuarios':
             $usuario->listarUsuarios();
             break;
+        case 'listarroles':
+            $rol->listarRoles();
+            break;
         case 'listarcategorias':
         case 'listar_categorias':
             $categoria->listarCategorias();
@@ -121,6 +164,25 @@ if ($method === 'GET') {
         case 'listarclientes':
         case 'listar_clientes':
             $cliente->listarClientes();
+            break;
+        case 'listarventas':
+        case 'listar_ventas':
+            $venta->listarVentas();
+            break;
+        case 'obtener_venta':
+            $venta->obtenerVenta();
+            break;
+        case 'reportes/ventas':
+        case 'reporte_ventas':
+            $reporte->reporteVentas();
+            break;
+        case 'auditoria/listar':
+        case 'listar_auditoria':
+            $auditoria->listarAuditoria();
+            break;
+        case 'movimientos/listar':
+        case 'listar_movimientos':
+            $auditoria->listarMovimientos();
             break;
         case 'listarpedidos':
         case 'listar_pedidos':
@@ -145,6 +207,7 @@ if ($method === 'POST') {
         exit;
     }
     $routes = [
+        'auth/login' => [$auth, 'login'],
         'auth/login-usuario' => [$auth, 'loginUsuario'],
         'auth/login-cliente' => [$auth, 'loginCliente'],
         'auth/registrar-cliente' => [$auth, 'registrarCliente'],
@@ -154,8 +217,10 @@ if ($method === 'POST') {
         'agregar_cliente' => [$cliente, 'agregarCliente'],
         'agregar_categoria' => [$categoria, 'agregarCategoria'],
         'agregar_producto' => [$producto, 'agregarProducto'],
+        'ajustar_stock' => [$producto, 'ajustarStock'],
         'subir_imagen_producto' => [$producto, 'subirImagen'],
         'quitar_imagen_producto' => [$producto, 'quitarImagen'],
+        'agregar_venta' => [$venta, 'agregarVenta'],
         'agregar_pedido' => [$pedido, 'agregarPedido'],
         'agregar_detallepedido' => [$detalle, 'agregarDetallePedido'],
         'update_configuracion' => [$configuracion, 'actualizarConfiguracion'],
@@ -198,7 +263,3 @@ if ($method === 'POST') {
     echo json_encode(['error' => 'Método no permitido.']);
     exit;
 }
-
-http_response_code(404);
-header('Content-Type: application/json; charset=utf-8');
-echo json_encode(['error' => 'Ruta no encontrada.']);
