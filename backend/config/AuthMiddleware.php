@@ -50,23 +50,29 @@ class AuthMiddleware
     {
         $user = AuthToken::fromRequest();
         if (!$user) {
-            self::deny(401, 'Debe iniciar sesión.');
+            self::deny(401, 'Debe iniciar sesión para continuar.');
         }
         require_once __DIR__ . '/../models/Usuario.php';
-        $id = filter_var($user['id_usuario'] ?? null, FILTER_VALIDATE_INT);
+        $id = filter_var($user['id_usuario'] ?? $user['id'] ?? null, FILTER_VALIDATE_INT);
         $current = $id ? Usuario::obtenerPorId($id) : null;
-        if (!$current || !(int) $current['activo'] || $current['rol'] !== ($user['rol'] ?? null)) {
+        if (!$current || !(int) $current['activo']) {
             self::deny(401, 'La sesión expiró o la cuenta está desactivada.');
         }
+
+        $user['id_usuario'] = (int) $current['id_usuario'];
+        $user['id'] = (int) $current['id_usuario'];
+        $user['id_rol'] = (int) ($current['id_rol'] ?? 3);
+        $user['rol'] = $current['rol'];
         $user['telefono'] = $current['telefono'];
         $user['nombre'] = $current['nombre'];
+        $user['correo'] = $current['correo'];
         return $user;
     }
 
     public static function esUsuario()
     {
         $user = self::autenticado();
-        if (($user['tipo'] ?? null) !== 'usuario') {
+        if (($user['tipo'] ?? null) !== 'usuario' && !in_array($user['rol'], ['administrador', 'vendedor'], true)) {
             self::deny(403, 'Acceso denegado.');
         }
         return $user;
@@ -76,7 +82,25 @@ class AuthMiddleware
     {
         $user = self::autenticado();
         if (($user['rol'] ?? null) !== 'cliente') {
-            self::deny(403, 'Acceso denegado.');
+            self::deny(403, 'Acceso denegado. Se requiere el rol de cliente.');
+        }
+        return $user;
+    }
+
+    public static function esVendedor()
+    {
+        $user = self::autenticado();
+        if (($user['rol'] ?? null) !== 'vendedor') {
+            self::deny(403, 'Acceso denegado. Se requiere el rol de vendedor.');
+        }
+        return $user;
+    }
+
+    public static function esVendedorOAdmin()
+    {
+        $user = self::autenticado();
+        if (!in_array($user['rol'] ?? null, ['administrador', 'vendedor'], true)) {
+            self::deny(403, 'Acceso denegado. Se requiere rol de vendedor o administrador.');
         }
         return $user;
     }
@@ -104,7 +128,7 @@ class AuthMiddleware
     {
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['error' => $message]);
+        echo json_encode(['error' => $message], JSON_UNESCAPED_UNICODE);
         exit;
     }
 }
