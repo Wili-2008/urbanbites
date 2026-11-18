@@ -1,0 +1,14 @@
+# ====================================================================
+# URBAN BITES - Módulo de Roles del Sistema
+# Documentación para REST Client de Visual Studio Code
+# ====================================================================
+
+@baseUrl = http://urbanbites.com/api/index.php
+# Reemplazar con el token obtenido al iniciar sesión
+@authToken = TU_TOKEN_JWT_AQUI
+
+### 1. Listar los dos roles iniciales (administrador y vendedor)
+# Respuesta esperada: 200 OK con id_rol, nombre y descripcion
+GET {{baseUrl}}/listarroles
+Accept: application/json
+Authorization: Bearer {{authToken}}

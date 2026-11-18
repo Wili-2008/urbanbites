@@ -1,0 +1,80 @@
+# ====================================================================
+# URBAN BITES - Módulo de Productos e Inventario
+# Documentación para REST Client de Visual Studio Code
+# Las operaciones de creación, edición y eliminación requieren rol Administrador
+# ====================================================================
+
+@baseUrl = http://urbanbites.com/api/index.php
+@adminToken = TU_TOKEN_ADMIN_AQUI
+
+### 1. Listar productos disponibles (Público / Catálogo)
+# Respuesta esperada: 200 OK con lista de productos activos y con stock
+GET {{baseUrl}}/listarproductos
+Accept: application/json
+
+### 2. Listar todos los productos incluyendo no disponibles (Solo Administrador)
+# Respuesta esperada: 200 OK con catálogo completo y existencias
+GET {{baseUrl}}/listarproductos?incluir_no_disponibles=1
+Accept: application/json
+Authorization: Bearer {{adminToken}}
+
+### 3. Crear producto con código único y stock inicial (Solo Administrador)
+# Valida código único, stock >= 0 y precio >= 0. Registra auditoría y movimiento de inventario inicial.
+# Respuesta esperada: 201 Created con id_producto y código asignado
+POST {{baseUrl}}/agregar_producto
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "id_categoria": 1,
+  "codigo": "HAM-003",
+  "nombre": "Hamburguesa BBQ Crunch",
+  "descripcion": "Carne premium, aros de cebolla crocantes, salsa barbacoa ahumada y queso cheddar fundido.",
+  "precio": 34.00,
+  "stock": 25,
+  "imagen": null,
+  "disponible": 1
+}
+
+### 4. Actualizar producto (Cambio de precio o stock genera registro en auditoría)
+# Si cambia el precio, la bitácora registra actor, fecha, precio anterior y precio nuevo.
+# Respuesta esperada: 200 OK con affected: 1
+PUT {{baseUrl}}/update_producto
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "id_producto": 1,
+  "id_categoria": 1,
+  "codigo": "HAM-001",
+  "nombre": "Hamburguesa Clásica Especial",
+  "descripcion": "Carne a la plancha, queso, lechuga, tomate y salsa de la casa con pepinillos.",
+  "precio": 30.00,
+  "stock": 45,
+  "imagen": null,
+  "disponible": 1
+}
+
+### 5. Ajustar existencias de inventario con motivo (Solo Administrador)
+# Cantidad positiva agrega existencias; negativa descuenta existencias. Nunca permite stock < 0.
+# Respuesta esperada: 200 OK con stock_anterior y stock_nuevo
+POST {{baseUrl}}/ajustar_stock
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "id_producto": 1,
+  "cantidad": 15,
+  "motivo": "Ingreso de nuevo lote de insumos"
+}
+
+### 6. Desactivar producto (Eliminación lógica / Soft delete - Solo Administrador)
+# Marca disponible = 0 y registra auditoría.
+# Respuesta esperada: 200 OK con affected: 1
+DELETE {{baseUrl}}/delete_producto
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "id_producto": 1
+}

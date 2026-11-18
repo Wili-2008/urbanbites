@@ -1,0 +1,100 @@
+# ====================================================================
+# URBAN BITES - Módulo de Usuarios y Control de Acceso
+# Documentación para REST Client de Visual Studio Code
+# Gestión de usuarios reservada para el rol Administrador
+# ====================================================================
+
+@baseUrl = http://urbanbites.com/api/index.php
+@adminToken = TU_TOKEN_ADMIN_AQUI
+
+### 1. Consultar si falta crear el primer administrador
+GET {{baseUrl}}/auth/setup-status
+Accept: application/json
+
+### 2. Crear el primer administrador (solo si setup_required es true)
+# En una base nueva, crea la cuenta inicial y devuelve su token.
+POST {{baseUrl}}/auth/setup-admin
+Content-Type: application/json
+
+{
+  "nombre": "Administrador",
+  "correo": "admin@urbanbites.com",
+  "contrasena": "CAMBIAR_POR_UNA_CLAVE_SEGURA"
+}
+
+### 3. Iniciar sesión (Administrador o Vendedor)
+# Respuesta esperada: 200 OK con token JWT y datos de usuario
+POST {{baseUrl}}/auth/login-usuario
+Content-Type: application/json
+
+{
+  "correo": "admin@urbanbites.com",
+  "contrasena": "TU_CONTRASENA"
+}
+
+### 4. Listar todos los usuarios con sus roles (Solo Administrador)
+# Muestra usuarios con id_rol y nombre del rol relacionado
+# Respuesta esperada: 200 OK con listado de usuarios
+GET {{baseUrl}}/listar_usuarios
+Accept: application/json
+Authorization: Bearer {{adminToken}}
+
+### 5. Registrar nuevo Vendedor (Solo Administrador)
+# Respuesta esperada: 201 Created con id_usuario
+POST {{baseUrl}}/agregar_usuario
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "nombre": "Pedro Ramirez",
+  "correo": "pedro.vendedor@urbanbites.com",
+  "telefono": "78912345",
+  "contrasena": "VendedorSeguro2026*",
+  "rol": "vendedor"
+}
+
+### 6. Registrar nuevo Administrador (Solo Administrador)
+# Respuesta esperada: 201 Created con id_usuario
+POST {{baseUrl}}/agregar_usuario
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "nombre": "Gerente Sucursal",
+  "correo": "gerente@urbanbites.com",
+  "telefono": "76543210",
+  "contrasena": "AdminSeguro2026*",
+  "rol": "administrador"
+}
+
+### 7. Actualizar usuario (modificar datos, rol o contraseña)
+# Respuesta esperada: 200 OK con affected: 1
+PUT {{baseUrl}}/update_usuario
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "id_usuario": 2,
+  "nombre": "Pedro Ramirez Morales",
+  "correo": "pedro.vendedor@urbanbites.com",
+  "telefono": "78912345",
+  "rol": "vendedor",
+  "activo": 1
+}
+
+### 8. Desactivar usuario (Solo Administrador)
+# Protege contra la desactivación del único administrador existente
+# Respuesta esperada: 200 OK con affected: 1
+DELETE {{baseUrl}}/delete_usuario
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "id_usuario": 2
+}
+
+### 9. Verificar token y perfil actual
+# Respuesta esperada: 200 OK con perfil activo del usuario
+GET {{baseUrl}}/auth/verify
+Accept: application/json
+Authorization: Bearer {{adminToken}}

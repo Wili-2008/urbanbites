@@ -1,5 +1,5 @@
 # Entorno y credenciales privadas
-backend/.env
+api/.env
 *.env
 *.env.local
 

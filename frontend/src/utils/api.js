@@ -1,6 +1,6 @@
 // Entrar al router mediante PATH_INFO evita el 400 que WAMP devuelve al
 // reescribir endpoints bajo el Alias del VirtualHost.
-const apiUrl = new URL('../../../backend/routes/api.php/', import.meta.url);
+const apiUrl = new URL('/api/index.php/', window.location.origin);
 
 const buildUrl = (endpoint) => new URL(String(endpoint).replace(/^\/+/, ''), apiUrl);
 

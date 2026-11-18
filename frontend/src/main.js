@@ -3,17 +3,6 @@ import { getSession, saveSession, clearSession } from './utils/session.js';
 
 const root = document.querySelector('#app');
 
-const readCart = () => {
-    try {
-        const cart = JSON.parse(localStorage.getItem('urban-bites.cart') || '[]');
-        return Array.isArray(cart) ? cart.filter((item) => item && Number(item.id_producto) > 0
-            && Number(item.cantidad) > 0 && Number.isFinite(Number(item.precio))) : [];
-    } catch {
-        localStorage.removeItem('urban-bites.cart');
-        return [];
-    }
-};
-
 const formatDateInput = (date) => {
     const d = new Date(date);
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -28,15 +17,12 @@ const state = {
     user: getSession()?.user || null,
     products: [],
     categories: [],
-    orders: [],
     users: [],
     roles: [],
     sales: [],
     report: null,
     auditLogs: [],
     inventoryMovements: [],
-    config: { nombre_negocio: 'Urban Bites', costo_envio: 10.00 },
-    cart: readCart(),
     posCart: [],
     posQuery: '',
     posCategory: 'Todos',
@@ -62,7 +48,6 @@ const state = {
     category: 'Todos',
     query: '',
     notice: '',
-    authMode: 'login',
     adminTab: 'reports',
     setupRequired: false,
     editingProductId: null,
@@ -92,8 +77,6 @@ const imageFor = (path, category) => {
     return imageFile ? new URL(`../${imageFile}`, import.meta.url).href : placeholderImage;
 };
 
-const subtotal = () => state.cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
-const cartCount = () => state.cart.reduce((sum, item) => sum + item.cantidad, 0);
 
 const posSubtotal = () => state.posCart.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
 const posTotal = () => Math.max(0, posSubtotal() - Number(state.posCustomer.descuento || 0));
@@ -119,14 +102,12 @@ function showNotice(message) {
 // -------------------------------------------------------------
 async function loadStore() {
     try {
-        const [products, categories, config] = await Promise.all([
+        const [products, categories] = await Promise.all([
             api.get('listarproductos'),
             api.get('listarcategorias'),
-            api.get('obtener_configuracion'),
         ]);
         state.products = Array.isArray(products) ? products : [];
         state.categories = Array.isArray(categories) ? categories : [];
-        state.config = config || state.config;
     } catch (error) {
         showNotice(error.message);
     }
@@ -137,20 +118,6 @@ async function loadAdminProducts() {
         const products = await api.get('listarproductos?incluir_no_disponibles=1');
         state.products = Array.isArray(products) ? products : [];
         state.categories = await api.get('listarcategorias?incluir_inactivas=1');
-        state.config = await api.get('obtener_configuracion');
-    } catch (error) {
-        showNotice(error.message);
-    }
-}
-
-async function loadOrders() {
-    try {
-        const allOrders = await api.get('listarpedidos');
-        const visible = isAdmin() ? allOrders : allOrders.filter((o) => Number(o.id_usuario) === Number(state.user.id_usuario));
-        state.orders = await Promise.all(visible.map(async (order) => ({
-            ...order,
-            items: await api.get(`listardetallepedidos?id_pedido=${encodeURIComponent(order.id_pedido)}`),
-        })));
     } catch (error) {
         showNotice(error.message);
     }
@@ -180,7 +147,7 @@ async function loadAudit() {
         if (state.auditFilters.accion) endpoint += `&accion=${encodeURIComponent(state.auditFilters.accion)}`;
         if (state.auditFilters.entidad) endpoint += `&entidad=${encodeURIComponent(state.auditFilters.entidad)}`;
         state.auditLogs = await api.get(endpoint);
-        state.inventoryMovements = await api.get('movimientos/listar?limite=60');
+        state.inventoryMovements = [];
     } catch (error) {
         showNotice(error.message);
     }
@@ -214,14 +181,12 @@ function header() {
             ${isStaff() ? `<button data-view="pos" class="font-bold text-orange-600">Punto de Venta (POS)</button>` : ''}
             ${isStaff() ? `<button data-view="sales">Ventas</button>` : ''}
             ${isAdmin() ? `<button data-view="admin">Administración</button>` : ''}
-            ${state.user?.rol === 'cliente' ? `<button data-view="orders">Mis pedidos</button>` : ''}
             ${state.user ? `
                 <span class="text-sm text-gray-700 hidden md:inline ml-2">👤 ${escapeHtml(state.user.nombre)} ${roleBadge}</span>
                 <button data-action="logout" class="quiet ml-2">Salir</button>
             ` : `
                 <button data-view="auth" class="quiet">Ingresar</button>
             `}
-            ${!isStaff() ? `<button class="cart-button ml-2" data-view="cart">Carrito <b>${cartCount()}</b></button>` : ''}
         </nav>
     </header>`;
 }
@@ -235,7 +200,7 @@ function menuPage() {
         <div>
             <span class="eyebrow">RECIÉN HECHO · CALIDAD Y SABOR</span>
             <h1>Sabor urbano.<br><em>Gestión en tiempo real.</em></h1>
-            <p>Plataforma integral Urban Bites con control estricto de inventario, punto de venta y pedidos en línea.</p>
+            <p>Plataforma Urban Bites para administrar existencias y registrar ventas de forma segura.</p>
             <div class="flex gap-3">
                 <button class="primary" data-scroll="catalogo">Explorar catálogo <span>↓</span></button>
                 ${isStaff() ? `<button class="primary bg-gray-900 hover:bg-black" data-view="pos">Abrir Punto de Venta <span>↗</span></button>` : ''}
@@ -278,11 +243,7 @@ function menuPage() {
                         </div>
                         <h3>${escapeHtml(p.nombre)}</h3>
                         <p>${escapeHtml(p.descripcion || 'Preparado al momento con ingredientes frescos.')}</p>
-                        ${outOfStock ? `
-                            <button class="add-button text-gray-400 cursor-not-allowed" disabled>Sin existencias</button>
-                        ` : `
-                            <button class="add-button" data-add="${p.id_producto}">Añadir al pedido <b>＋</b></button>
-                        `}
+                        ${outOfStock ? '<button class="add-button text-gray-400 cursor-not-allowed" disabled>Sin existencias</button>' : isStaff() ? `<button class="add-button" data-add="${p.id_producto}">Agregar a venta <b>＋</b></button>` : '<span class="text-xs text-gray-500">Disponible para venta en caja</span>'}
                     </div>
                 </article>`;
             }).join('') || '<div class="empty">No encontramos productos en esta categoría.</div>'}
@@ -453,8 +414,9 @@ function receiptModal() {
             </div>
             <div class="receipt-lines">
                 ${(r.items || []).map((it) => `
-                    <div class="flex justify-between text-xs">
-                        <span>${it.cantidad} × ${escapeHtml(it.nombre || it.producto)}</span>
+                    <div class="receipt-line">
+                        <span class="receipt-product">${escapeHtml(it.nombre || it.producto)}</span>
+                        <span>${Number(it.cantidad || 0)} × ${money(it.precio_unitario)}</span>
                         <b>${money(it.subtotal)}</b>
                     </div>
                 `).join('')}
@@ -470,7 +432,7 @@ function receiptModal() {
                 ` : ''}
             </div>
             <div class="receipt-actions no-print">
-                <button class="primary flex-1 justify-center py-2 text-sm" onclick="window.print()">🖨️ Imprimir Ticket</button>
+                <button class="primary flex-1 justify-center py-2 text-sm" id="printTicketBtn">🖨️ Imprimir Ticket</button>
                 <button class="px-4 py-2 border rounded text-sm hover:bg-gray-100" id="closeReceiptBtn">Nueva Venta</button>
             </div>
         </div>
@@ -668,12 +630,11 @@ function adminAuditTab() {
                     <thead>
                         <tr>
                             <th>Fecha</th>
-                            <th>Actor (Usuario)</th>
+                            <th>Vendedor / Usuario</th>
                             <th>Acción</th>
-                            <th>Entidad / ID</th>
-                            <th>Valores Anteriores</th>
-                            <th>Valores Nuevos</th>
-                            <th>Detalles</th>
+                            <th>Venta / Registro</th>
+                            <th>Detalle</th>
+                            <th>Total</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -684,56 +645,37 @@ function adminAuditTab() {
                             else if (a.accion === 'DESACTIVAR' || a.accion === 'ELIMINAR') badgeClass = 'badge-deactivate';
                             else if (a.accion === 'VENTA_REGISTRADA') badgeClass = 'badge-sale';
 
+                            let details = a.detalles || '';
+                            let total = '';
+                            if (a.accion === 'VENTA_REGISTRADA') {
+                                let sale = {};
+                                try { sale = JSON.parse(a.datos_nuevos || '{}'); } catch { sale = {}; }
+                                const items = Array.isArray(sale.items) ? sale.items : [];
+                                details = `${escapeHtml(sale.cliente_nombre || 'Consumidor Final')}<br>${items.map((item) => {
+                                    const price = item.precio_unitario == null ? 'precio no disponible' : `${money(item.precio_unitario)} c/u`;
+                                    const line = item.subtotal == null ? '' : ` · ${money(item.subtotal)}`;
+                                    return `${escapeHtml(item.nombre || item.codigo || 'Producto')} × ${Number(item.cantidad || 0)} (${price}${line})`;
+                                }).join('<br>') || escapeHtml(a.detalles || 'Detalle no disponible')}`;
+                                total = sale.total == null ? '' : money(sale.total);
+                            } else {
+                                details = escapeHtml(details || '—');
+                            }
+
                             return `
                             <tr>
                                 <td class="text-xs whitespace-nowrap text-gray-500">${escapeHtml(a.fecha)}</td>
                                 <td><b>${escapeHtml(a.usuario || 'Sistema')}</b> <small class="text-gray-400">(${escapeHtml(a.rol || 'auto')})</small></td>
                                 <td><span class="badge-audit ${badgeClass}">${escapeHtml(a.accion)}</span></td>
-                                <td><span class="text-xs font-mono">${escapeHtml(a.entidad)} #${a.entidad_id ?? '-'}</span></td>
-                                <td class="text-xs font-mono text-gray-600 max-w-xs truncate" title="${escapeHtml(a.datos_anteriores || '')}">${escapeHtml(a.datos_anteriores || '-')}</td>
-                                <td class="text-xs font-mono text-gray-800 max-w-xs truncate" title="${escapeHtml(a.datos_nuevos || '')}">${escapeHtml(a.datos_nuevos || '-')}</td>
-                                <td class="text-xs text-gray-700">${escapeHtml(a.detalles || '')}</td>
+                                <td class="text-xs">${escapeHtml(a.entidad || '')} #${Number(a.entidad_id || 0) || '—'}</td>
+                                <td class="text-xs text-gray-700">${details}</td>
+                                <td class="text-xs font-bold whitespace-nowrap">${escapeHtml(total || '—')}</td>
                             </tr>`;
-                        }).join('') || '<tr><td colspan="7" class="text-center py-6 text-gray-400">No hay registros de auditoría aún.</td></tr>'}
+                        }).join('') || '<tr><td colspan="6" class="text-center py-6 text-gray-400">No hay registros de auditoría aún.</td></tr>'}
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- KARDEX DE MOVIMIENTOS DE INVENTARIO -->
-        <div class="report-card">
-            <h3>📦 Movimientos Recientes de Inventario (Kardex)</h3>
-            <div style="overflow-x:auto;">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Código</th>
-                            <th>Producto</th>
-                            <th>Tipo Movimiento</th>
-                            <th class="text-center">Stock Previo</th>
-                            <th class="text-center">Cantidad</th>
-                            <th class="text-center">Nuevo Stock</th>
-                            <th>Motivo</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${state.inventoryMovements.map((m) => `
-                            <tr>
-                                <td class="text-xs text-gray-500">${escapeHtml(m.fecha)}</td>
-                                <td><span class="font-bold text-xs">${escapeHtml(m.codigo)}</span></td>
-                                <td><b>${escapeHtml(m.producto)}</b></td>
-                                <td><span class="text-xs font-bold uppercase ${m.tipo_movimiento === 'egreso_venta' ? 'text-rose-700' : 'text-emerald-700'}">${escapeHtml(m.tipo_movimiento)}</span></td>
-                                <td class="text-center font-mono">${m.stock_anterior}</td>
-                                <td class="text-center font-bold ${m.cantidad < 0 ? 'text-rose-700' : 'text-emerald-700'}">${m.cantidad > 0 ? `+${m.cantidad}` : m.cantidad}</td>
-                                <td class="text-center font-mono font-bold">${m.stock_nuevo}</td>
-                                <td class="text-xs text-gray-600">${escapeHtml(m.motivo || '')}</td>
-                            </tr>
-                        `).join('') || '<tr><td colspan="8" class="text-center py-6 text-gray-400">No hay movimientos de inventario registrados.</td></tr>'}
-                    </tbody>
-                </table>
-            </div>
-        </div>
     </div>`;
 }
 
@@ -907,7 +849,6 @@ function userAdminPage() {
             <select name="rol">
                 <option value="vendedor" selected>Vendedor (Punto de Venta únicamente)</option>
                 <option value="administrador">Administrador (Acceso total, inventario, reportes)</option>
-                <option value="cliente">Cliente</option>
             </select>
         </label>
         <button class="primary">Crear cuenta de personal ↗</button>
@@ -932,7 +873,6 @@ function userAdminPage() {
                     <select data-user-role="${u.id_usuario}" ${Number(u.id_usuario) === Number(state.user.id_usuario) ? 'disabled title="No puedes cambiar tu propio rol"' : ''}>
                         <option value="administrador" ${u.rol === 'administrador' ? 'selected' : ''}>Administrador</option>
                         <option value="vendedor" ${u.rol === 'vendedor' ? 'selected' : ''}>Vendedor</option>
-                        <option value="cliente" ${u.rol === 'cliente' ? 'selected' : ''}>Cliente</option>
                     </select>
                 </label>
                 <div class="flex gap-2 mt-2">
@@ -952,9 +892,7 @@ function adminPage() {
         ['products', '🍔 Inventario y Productos'],
         ['audit', '🛡️ Auditoría y Bitácora'],
         ['users', '👥 Personal y Roles'],
-        ['orders', '📦 Pedidos Web'],
         ['categories', '🏷️ Categorías'],
-        ['config', '⚙️ Negocio'],
     ];
 
     let body = '';
@@ -962,15 +900,7 @@ function adminPage() {
     else if (state.adminTab === 'products') body = productAdminPage();
     else if (state.adminTab === 'audit') body = adminAuditTab();
     else if (state.adminTab === 'users') body = userAdminPage();
-    else if (state.adminTab === 'orders') body = ordersPage();
     else if (state.adminTab === 'categories') body = categoryAdminPage();
-    else if (state.adminTab === 'config') body = `
-        <form id="configForm" class="form-card admin-form">
-            <h2>Configuración del Negocio</h2>
-            <label>Nombre del comercio<input name="nombre_negocio" value="${escapeHtml(state.config.nombre_negocio)}" required></label>
-            <label>Costo de entrega a domicilio (Bs)<input name="costo_envio" type="number" min="0" step="0.50" value="${Number(state.config.costo_envio)}" required></label>
-            <button class="primary mt-3">Guardar configuración ↗</button>
-        </form>`;
 
     return `<section class="page-wrap admin-page">
         <span class="eyebrow">CONTROL TOTAL</span>
@@ -979,124 +909,6 @@ function adminPage() {
             ${tabs.map(([key, label]) => `<button data-admin-tab="${key}" class="${state.adminTab === key ? 'selected' : ''}">${label}</button>`).join('')}
         </div>
         ${body}
-    </section>`;
-}
-
-// -------------------------------------------------------------
-// PEDIDOS WEB DE CLIENTES (Módulo Conservado)
-// -------------------------------------------------------------
-function ordersPage() {
-    return `<section class="page-wrap">
-        <span class="eyebrow">SEGUIMIENTO</span>
-        <h1>${isAdmin() ? 'Pedidos Recibidos (Canal Online)' : 'Mis Pedidos'}</h1>
-        <div class="orders-list">
-            ${state.orders.map((o) => `
-                <article class="order-card">
-                    <div class="order-title">
-                        <div>
-                            <small>PEDIDO #${o.id_pedido}${isAdmin() ? ` · ${escapeHtml(o.usuario || '')} (${escapeHtml(o.correo || '')})` : ''}</small>
-                            <h2>${o.tipo_entrega === 'domicilio' ? `Entrega a domicilio · ${escapeHtml(o.direccion_entrega || '')}` : 'Retiro en local'}</h2>
-                        </div>
-                        <span class="status status-${escapeHtml(o.estado)}">${escapeHtml(String(o.estado).replaceAll('_', ' '))}</span>
-                    </div>
-                    <p class="text-xs text-gray-500">${new Date(String(o.fecha_pedido).replace(' ', 'T')).toLocaleString('es-BO')}</p>
-                    <div class="order-items">
-                        ${(o.items || []).map((item) => `<span>${item.cantidad} × ${escapeHtml(item.nombre || item.producto)} <b>${money(item.subtotal)}</b></span>`).join('')}
-                    </div>
-                    <div class="order-total-line">
-                        <span>Subtotal ${money(o.subtotal)} · Envío ${money(o.costo_envio)}</span>
-                        <strong>${money(o.total)}</strong>
-                    </div>
-                    ${isAdmin() ? `
-                        <div class="status-control">
-                            <label>Estado
-                                <select data-status="${o.id_pedido}">
-                                    ${['pendiente', 'aceptado', 'en_preparacion', 'listo', 'entregado', 'cancelado'].map((s) => `<option value="${s}" ${o.estado === s ? 'selected' : ''}>${s.replaceAll('_', ' ')}</option>`).join('')}
-                                </select>
-                            </label>
-                            <button class="primary" data-save-status="${o.id_pedido}">Actualizar estado</button>
-                        </div>
-                    ` : ''}
-                </article>
-            `).join('') || '<div class="empty">Aún no hay pedidos registrados.</div>'}
-        </div>
-    </section>`;
-}
-
-// -------------------------------------------------------------
-// CARRITO DE CLIENTE (CANAL ONLINE)
-// -------------------------------------------------------------
-function cartPage() {
-    const fee = Number(state.config.costo_envio || 0);
-    return `<section class="page-wrap">
-        <div class="section-heading">
-            <div>
-                <span class="eyebrow">TU SELECCIÓN</span>
-                <h1>Tu pedido en línea</h1>
-            </div>
-            <button class="link-button" data-view="menu">← Seguir explorando</button>
-        </div>
-        ${state.cart.length ? `
-            <div class="checkout-layout">
-                <div class="cart-list">
-                    ${state.cart.map((item, index) => `
-                        <article class="cart-line">
-                            <img src="${escapeHtml(imageFor(item.imagen))}" onerror="this.onerror=null;this.src='${placeholderImage}'" alt="">
-                            <div>
-                                <h3>${escapeHtml(item.nombre)}</h3>
-                                <p>${money(item.precio)} por unidad</p>
-                                <div class="quantity">
-                                    <button data-qty="${index}" data-delta="-1">−</button>
-                                    <b>${item.cantidad}</b>
-                                    <button data-qty="${index}" data-delta="1">＋</button>
-                                    <button class="remove" data-remove="${index}">Quitar</button>
-                                </div>
-                            </div>
-                            <strong>${money(item.precio * item.cantidad)}</strong>
-                        </article>
-                    `).join('')}
-                </div>
-                <form id="checkoutForm" class="summary-card">
-                    <h2>Detalles de entrega</h2>
-                    <label class="radio-option">
-                        <input type="radio" name="tipo_entrega" value="recoger" checked>
-                        <span><b>Recoger en local</b><small>Sin costo adicional</small></span>
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="tipo_entrega" value="domicilio">
-                        <span><b>Entrega a domicilio</b><small>${money(fee)} de costo de envío</small></span>
-                    </label>
-                    <label class="address-field hidden">
-                        Dirección de entrega
-                        <input name="direccion_entrega" maxlength="255" placeholder="Calle, zona y número">
-                    </label>
-                    <label>
-                        Referencia (opcional)
-                        <input name="referencia_entrega" maxlength="255" placeholder="Ej: Puerta verde frente a la plaza">
-                    </label>
-                    <label>
-                        Teléfono de contacto
-                        <input name="telefono_contacto" type="tel" maxlength="25" value="${escapeHtml(state.user?.telefono || '')}" placeholder="Número de celular" required>
-                    </label>
-                    <label>
-                        Nota para cocina (opcional)
-                        <textarea name="observaciones" rows="2" maxlength="500" placeholder="Sin cebolla, salsas aparte…"></textarea>
-                    </label>
-                    <div class="totals">
-                        <span>Subtotal <b>${money(subtotal())}</b></span>
-                        <span>Envío <b class="shipping-cost">${money(0)}</b></span>
-                        <strong>Total <b class="order-total">${money(subtotal())}</b></strong>
-                    </div>
-                    <button class="primary wide">Confirmar pedido online <span>↗</span></button>
-                </form>
-            </div>
-        ` : `
-            <div class="empty">
-                <h2>Tu carrito está vacío</h2>
-                <p>Explora el menú y agrega tus platos favoritos.</p>
-                <button class="primary mt-4" data-view="menu">Ver catálogo ↗</button>
-            </div>
-        `}
     </section>`;
 }
 
@@ -1121,32 +933,17 @@ function authPage() {
         </section>`;
     }
 
-    const register = state.authMode === 'register';
     return `<section class="auth-layout">
         <div class="auth-copy">
             <span class="eyebrow">ACCESO AL SISTEMA</span>
             <h1>Sabor urbano.<br>Control total.</h1>
-            <p>Inicia sesión como Administrador, Vendedor (Punto de Venta) o Cliente para acceder a las funciones correspondientes a tu rol.</p>
+            <p>Acceso para personal autorizado: Administrador o Vendedor.</p>
         </div>
         <form id="authForm" class="form-card">
-            <h2>${register ? 'Crear cuenta de cliente' : 'Iniciar sesión'}</h2>
-            ${register ? `
-                <label>Nombre<input name="nombre" required maxlength="100" autocomplete="name"></label>
-                <label>Teléfono<input name="telefono" maxlength="25" autocomplete="tel"></label>
-            ` : `
-                <label>Tipo de acceso
-                    <select name="tipo_cuenta">
-                        <option value="staff">Personal (Administrador / Vendedor)</option>
-                        <option value="cliente">Cliente (Pedidos en línea)</option>
-                    </select>
-                </label>
-            `}
+            <h2>Iniciar sesión</h2>
             <label>Correo electrónico<input name="correo" type="email" required autocomplete="email"></label>
             <label>Contraseña<input name="contrasena" type="password" required minlength="6" autocomplete="current-password"></label>
-            <button class="primary wide mt-3">${register ? 'Crear cuenta' : 'Ingresar al sistema'} <span>↗</span></button>
-            <button class="link-button mt-2" type="button" data-action="auth-toggle">
-                ${register ? '¿Ya tienes una cuenta? Iniciar sesión' : '¿Primera vez como cliente? Crear cuenta'}
-            </button>
+            <button class="primary wide mt-3">Ingresar al sistema <span>↗</span></button>
         </form>
     </section>`;
 }
@@ -1157,10 +954,8 @@ function authPage() {
 function render() {
     let page;
     if (state.view === 'auth') page = authPage();
-    else if (state.view === 'cart') page = cartPage();
     else if (state.view === 'pos' && isStaff()) page = posPage();
     else if (state.view === 'sales' && isStaff()) page = salesPage();
-    else if (state.view === 'orders') page = ordersPage();
     else if (state.view === 'admin' && isAdmin()) page = adminPage();
     else page = menuPage();
 
@@ -1174,17 +969,7 @@ function render() {
     bind();
 }
 
-function persistCart() {
-    localStorage.setItem('urban-bites.cart', JSON.stringify(state.cart));
-}
-
 async function showView(view) {
-    if (['cart', 'orders'].includes(view) && !state.user) {
-        state.view = 'auth';
-        state.notice = 'Inicia sesión para continuar.';
-        render();
-        return;
-    }
     if (['pos', 'sales'].includes(view) && !isStaff()) {
         state.view = 'auth';
         state.notice = 'Acceso exclusivo para personal de caja o administración.';
@@ -1204,8 +989,6 @@ async function showView(view) {
             await loadStore();
         } else if (view === 'sales') {
             await loadSales();
-        } else if (view === 'orders') {
-            await loadOrders();
         } else if (view === 'admin') {
             state.editingProductId = null;
             state.editingCategoryId = null;
@@ -1213,7 +996,6 @@ async function showView(view) {
             if (state.adminTab === 'reports') await loadReports();
             else if (state.adminTab === 'audit') await loadAudit();
             else if (state.adminTab === 'users') await loadUsers();
-            else if (state.adminTab === 'orders') await loadOrders();
             else await loadAdminProducts();
         }
     } catch (error) {
@@ -1253,12 +1035,12 @@ function bind() {
         document.querySelector('#catalogo')?.scrollIntoView({ behavior: 'smooth' });
     });
 
-    // Carrito de cliente
+    // Acceso directo desde el catalogo al punto de venta.
     root.querySelectorAll('[data-add]').forEach((btn) => btn.addEventListener('click', () => {
         const product = state.products.find((p) => Number(p.id_producto) === Number(btn.dataset.add));
         if (!product) return;
         const stock = Number(product.stock ?? 0);
-        const current = state.cart.find((item) => Number(item.id_producto) === Number(product.id_producto));
+        const current = state.posCart.find((item) => Number(item.id_producto) === Number(product.id_producto));
         const currentQty = current ? current.cantidad : 0;
 
         if (currentQty + 1 > stock) {
@@ -1267,7 +1049,7 @@ function bind() {
         }
 
         if (current) current.cantidad++;
-        else state.cart.push({
+        else state.posCart.push({
             id_producto: Number(product.id_producto),
             nombre: product.nombre,
             precio: Number(product.precio),
@@ -1275,68 +1057,11 @@ function bind() {
             cantidad: 1,
         });
 
-        persistCart();
-        showNotice(`${product.nombre} añadido al pedido.`);
-    }));
-
-    root.querySelectorAll('[data-qty]').forEach((btn) => btn.addEventListener('click', () => {
-        const item = state.cart[Number(btn.dataset.qty)];
-        const product = state.products.find((p) => Number(p.id_producto) === Number(item.id_producto));
-        const stock = product ? Number(product.stock) : 999;
-        const newQty = item.cantidad + Number(btn.dataset.delta);
-
-        if (newQty > stock) {
-            showNotice(`Solo hay ${stock} unidades disponibles.`);
-            return;
-        }
-        item.cantidad = Math.max(1, newQty);
-        persistCart();
+        state.view = 'pos';
         render();
+        showNotice(`${product.nombre} agregado a la venta.`);
     }));
 
-    root.querySelectorAll('[data-remove]').forEach((btn) => btn.addEventListener('click', () => {
-        state.cart.splice(Number(btn.dataset.remove), 1);
-        persistCart();
-        render();
-    }));
-
-    // Selección de entrega en checkout cliente
-    root.querySelectorAll('[name="tipo_entrega"]').forEach((radio) => radio.addEventListener('change', () => {
-        if (!radio.checked) return;
-        const delivery = radio.value === 'domicilio';
-        root.querySelector('.address-field')?.classList.toggle('hidden', !delivery);
-        const addr = root.querySelector('[name="direccion_entrega"]');
-        if (addr) addr.required = delivery;
-        const fee = delivery ? Number(state.config.costo_envio) : 0;
-        const shp = root.querySelector('.shipping-cost');
-        if (shp) shp.textContent = money(fee);
-        const tot = root.querySelector('.order-total');
-        if (tot) tot.textContent = money(subtotal() + fee);
-    }));
-
-    // Confirmación de pedido online (cliente)
-    root.querySelector('#checkoutForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.currentTarget));
-        const payload = {
-            ...data,
-            id_usuario: Number(state.user.id_usuario),
-            items: state.cart.map((item) => ({ id_producto: item.id_producto, cantidad: item.cantidad })),
-        };
-        try {
-            const result = await api.post('agregar_pedido', payload);
-            state.cart = [];
-            persistCart();
-            state.view = 'orders';
-            state.notice = `Pedido #${result.id_pedido} confirmado por ${money(result.total)}.`;
-            await loadOrders();
-            render();
-        } catch (error) {
-            showNotice(error.message);
-        }
-    });
-
-    // =========================================================
     // EVENTOS DEL PUNTO DE VENTA (POS)
     // =========================================================
     // Búsqueda en el POS
@@ -1436,6 +1161,13 @@ function bind() {
         render();
     }));
 
+    root.querySelector('[name="cliente_nombre"]')?.addEventListener('input', (e) => {
+        state.posCustomer.cliente_nombre = e.target.value;
+    });
+    root.querySelector('[name="cliente_documento"]')?.addEventListener('input', (e) => {
+        state.posCustomer.cliente_documento = e.target.value;
+    });
+
     // Cálculo dinámico de cambio en efectivo
     const montoInp = root.querySelector('#posMontoRecibido');
     if (montoInp) {
@@ -1490,8 +1222,10 @@ function bind() {
             const res = await api.post('agregar_venta', payload);
             state.lastSaleReceipt = res.venta;
             state.posCart = [];
+            state.posCustomer.cliente_nombre = 'Consumidor Final';
+            state.posCustomer.cliente_documento = '';
             state.posCustomer.monto_recibido = '';
-            showNotice(`¡Venta ${res.venta.numero_venta} completada por ${money(res.venta.total)}!`);
+            showNotice(res.venta.advertencia_auditoria || `¡Venta ${res.venta.numero_venta} completada por ${money(res.venta.total)}!`);
             await loadStore(); // Actualiza existencias inmediatamente
             render();
         } catch (error) {
@@ -1502,6 +1236,12 @@ function bind() {
     root.querySelector('#closeReceiptBtn')?.addEventListener('click', () => {
         state.lastSaleReceipt = null;
         render();
+    });
+
+    root.querySelector('#printTicketBtn')?.addEventListener('click', () => {
+        document.body.classList.add('printing-ticket');
+        window.print();
+        window.setTimeout(() => document.body.classList.remove('printing-ticket'), 1000);
     });
 
     // Ver ticket desde historial de ventas
@@ -1542,7 +1282,6 @@ function bind() {
             if (state.adminTab === 'reports') await loadReports();
             else if (state.adminTab === 'audit') await loadAudit();
             else if (state.adminTab === 'users') await loadUsers();
-            else if (state.adminTab === 'orders') await loadOrders();
             else await loadAdminProducts();
         } catch (error) {
             showNotice(error.message);
@@ -1794,53 +1533,13 @@ function bind() {
         }
     }));
 
-    // Configuración general
-    root.querySelector('#configForm')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.currentTarget));
-        data.costo_envio = Number(data.costo_envio);
-        try {
-            await api.put('update_configuracion', data);
-            await loadAdminProducts();
-            showNotice('Configuración del comercio guardada.');
-        } catch (error) {
-            showNotice(error.message);
-        }
-    });
-
-    // Actualizar estado de pedidos (admin)
-    root.querySelectorAll('[data-save-status]').forEach((btn) => btn.addEventListener('click', async () => {
-        const id = Number(btn.dataset.saveStatus);
-        const estado = root.querySelector(`[data-status="${id}"]`).value;
-        try {
-            await api.put('update_pedido', { id_pedido: id, estado });
-            await loadOrders();
-            showNotice('Estado del pedido actualizado.');
-        } catch (error) {
-            showNotice(error.message);
-        }
-    }));
-
-    // =========================================================
     // EVENTOS DE AUTENTICACIÓN
     // =========================================================
     root.querySelector('#authForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const payload = Object.fromEntries(new FormData(e.currentTarget));
-        const tipoCuenta = payload.tipo_cuenta;
-        delete payload.tipo_cuenta;
-
         try {
-            let endpoint;
-            if (state.authMode === 'register') {
-                endpoint = 'auth/registrar-cliente';
-            } else if (tipoCuenta === 'staff') {
-                endpoint = 'auth/login-usuario';
-            } else {
-                endpoint = 'auth/login-cliente';
-            }
-
-            const result = await api.post(endpoint, payload);
+            const result = await api.post('auth/login-usuario', payload);
             const session = saveSession(result.user, result.token);
             state.user = session.user;
             state.notice = '';
@@ -1876,18 +1575,12 @@ function bind() {
         }
     });
 
-    root.querySelector('[data-action="auth-toggle"]')?.addEventListener('click', () => {
-        state.authMode = state.authMode === 'register' ? 'login' : 'register';
-        render();
-    });
-
     root.querySelector('[data-action="logout"]')?.addEventListener('click', async () => {
         await api.post('auth/logout', {}).catch(() => {});
         clearSession();
         state.user = null;
         state.view = 'menu';
         state.posCart = [];
-        state.authMode = 'login';
         state.notice = '';
         render();
         showNotice('Sesión finalizada.');

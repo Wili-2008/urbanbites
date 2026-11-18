@@ -1,0 +1,42 @@
+# ====================================================================
+# URBAN BITES - Módulo de Reportes de Ventas
+# Documentación para REST Client de Visual Studio Code
+# Solo accesible para el rol Administrador
+# ====================================================================
+
+@baseUrl = http://urbanbites.com/api/index.php
+# Reemplazar con el token obtenido al iniciar sesión como Administrador
+@adminToken = TU_TOKEN_ADMIN_AQUI
+
+### 1. Iniciar sesión como Administrador
+# Respuesta esperada: 200 OK con objeto user (rol: "administrador") y token JWT
+POST {{baseUrl}}/auth/login-usuario
+Content-Type: application/json
+
+{
+  "correo": "admin@urbanbites.com",
+  "contrasena": "TU_CONTRASENA"
+}
+
+### 2. Consultar reporte de ventas del mes en curso (fechas por defecto)
+# Respuesta esperada: 200 OK con:
+# - resumen: total_ventas, recaudacion_total, unidades_vendidas, ticket_promedio
+# - ventas_por_metodo: totales agrupados por efectivo, qr, tarjeta, etc.
+# - productos_mas_vendidos: ranking con id_producto, codigo, nombre, unidades y subtotal
+# - ventas_por_vendedor: rendimiento de cada cajero/vendedor
+# - ventas: listado de transacciones
+GET {{baseUrl}}/reportes/ventas
+Accept: application/json
+Authorization: Bearer {{adminToken}}
+
+### 3. Consultar reporte de ventas filtrado por rango de fechas específico
+# Respuesta esperada: 200 OK con reporte del periodo 01/11/2026 al 18/11/2026
+GET {{baseUrl}}/reportes/ventas?fecha_inicio=2026-11-01&fecha_fin=2026-11-18
+Accept: application/json
+Authorization: Bearer {{adminToken}}
+
+### 4. Intento de acceso sin permisos (Prueba de seguridad: sin token o con rol vendedor)
+# Respuesta esperada: 401 Unauthorized o 403 Forbidden
+# {"error": "Acceso denegado. Se requiere el rol de administrador."}
+GET {{baseUrl}}/reportes/ventas
+Accept: application/json

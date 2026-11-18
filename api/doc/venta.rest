@@ -1,0 +1,87 @@
+# ====================================================================
+# URBAN BITES - Módulo de Punto de Venta (POS) y Ventas
+# Documentación para REST Client de Visual Studio Code
+# ====================================================================
+
+@baseUrl = http://urbanbites.com/api/index.php
+# Reemplazar con el token obtenido al iniciar sesión como vendedor o administrador
+@authToken = TU_TOKEN_JWT_AQUI
+
+### 1. Iniciar sesión como Vendedor
+# Respuesta esperada: 200 OK con objeto user (rol: "vendedor") y token JWT
+POST {{baseUrl}}/auth/login-usuario
+Content-Type: application/json
+
+{
+  "correo": "vendedor@urbanbites.com",
+  "contrasena": "TU_CONTRASENA"
+}
+
+### 2. Consultar catálogo de productos para el POS (vendedor o admin)
+# Respuesta esperada: 200 OK con lista de productos incluyendo id_producto, codigo, nombre, precio, stock
+GET {{baseUrl}}/listarproductos
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+### 3. Registrar venta en el Punto de Venta (POS) - Pago en Efectivo
+# Ejecuta transacción: bloquea stock, valida cantidades, descuenta unidades, calcula totales en el servidor y registra auditoría.
+# Respuesta esperada: 201 Created con detalle de la venta, numero_venta, total y cambio calculado
+POST {{baseUrl}}/agregar_venta
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "cliente_nombre": "Carlos Mendoza",
+  "cliente_documento": "8472910 SC",
+  "metodo_pago": "efectivo",
+  "monto_recibido": 100.00,
+  "descuento": 0.00,
+  "observaciones": "Atendido en mostrador",
+  "items": [
+    {
+      "id_producto": 1,
+      "cantidad": 2
+    },
+    {
+      "id_producto": 5,
+      "cantidad": 1
+    }
+  ]
+}
+
+### 4. Registrar venta en el POS - Pago con QR / Tarjeta
+# Respuesta esperada: 201 Created con venta procesada
+POST {{baseUrl}}/agregar_venta
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "cliente_nombre": "Mariana Gómez",
+  "cliente_documento": "6519203 LP",
+  "metodo_pago": "qr",
+  "descuento": 0.00,
+  "items": [
+    {
+      "id_producto": 2,
+      "cantidad": 1
+    }
+  ]
+}
+
+### 5. Listar ventas realizadas (Vendedor ve las suyas; Administrador ve todas)
+# Respuesta esperada: 200 OK con listado de ventas, vendedor, totales y estado
+GET {{baseUrl}}/listar_ventas
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+### 6. Listar ventas con filtro de fechas (Administrador)
+# Respuesta esperada: 200 OK con ventas filtradas
+GET {{baseUrl}}/listar_ventas?fecha_inicio=2026-11-01&fecha_fin=2026-11-18
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+### 7. Consultar detalle de una venta por ID
+# Respuesta esperada: 200 OK con información de la venta y lista de productos vendidos
+GET {{baseUrl}}/obtener_venta?id_venta=1
+Accept: application/json
+Authorization: Bearer {{authToken}}
